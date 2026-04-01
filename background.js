@@ -1,78 +1,50 @@
 chrome.commands.onCommand.addListener(async (command) => {
-    if (command === "copy-smart-link") {
-        const [tab] = await chrome.tabs.query({
-            active: true,
-            currentWindow: true,
-        });
+  if (command === "copy-smart-link") {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-        chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            func: async () => {
-                // Escape HTML
-                const esc = (s) =>
-                    s
-                        .replace(/&/g, "&amp;")
-                        .replace(/</g, "&lt;")
-                        .replace(/>/g, "&gt;");
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: async () => {
+        const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 
-                const title = document.title.trim();
-                const url = location.href;
+        const title = document.title.trim();
+        const url = location.href;
 
-                // GitHub PR detection
-                const pr = url.match(
-                    /github\.com\/[^\/]+\/[^\/]+\/pull\/(\d+)/i,
-                );
-                // Jira detection (any uppercase letters + numbers)
-                const jira = title.match(
-                    /^\[([A-Z][A-Z0-9]+-\d+)\]\s*(.*?)\s*-\s*Jira$/i,
-                );
+        const pr = url.match(/github\.com\/[^\/]+\/[^\/]+\/pull\/(\d+)/i);
+        const jira = title.match(/^\[([A-Z][A-Z0-9]+-\d+)\]\s*(.*?)\s*-\s*Jira$/i);
 
-                // Prompt for custom text (optional)
-                let input = prompt(
-                    "Enter custom text (leave blank for smart link):",
-                );
+        let input = prompt("Enter custom text (leave blank for smart link):");
 
-                let htmlContent, plainContent;
+        let html, text;
 
-                if (input && input.trim()) {
-                    const txt = input.trim();
-                    htmlContent = `<a href='${url}'>${esc(txt)}</a>`;
-                    plainContent = txt;
-                } else if (pr) {
-                    plainContent = "PR #" + pr[1];
-                    htmlContent = `<a href='${url}'>${plainContent}</a>`;
-                } else if (jira) {
-                    plainContent = `${jira[1]}: ${jira[2]}`;
-                    htmlContent = `<a href='${url}'>${esc(jira[1])}</a>: ${esc(jira[2])}`;
-                } else {
-                    plainContent = title;
-                    htmlContent = `<a href='${url}'>${esc(title)}</a>`;
-                }
+        if (input && input.trim()) {
+          const txt = input.trim();
+          html = `<a href='${url}'>${esc(txt)}</a>`;
+          text = txt; // Only for console/fallback
+        } else if (pr) {
+          html = `<a href='${url}'>PR #${pr[1]}</a>`;
+          text = `PR #${pr[1]}`;
+        } else if (jira) {
+          html = `<a href='${url}'>${esc(jira[1])}</a>: ${esc(jira[2])}`;
+          text = `${jira[1]}: ${jira[2]}`;
+        } else {
+          html = `<a href='${url}'>${esc(title)}</a>`;
+          text = title;
+        }
 
-                // Copy to clipboard: HTML + plain text
-                try {
-                    await navigator.clipboard.write([
-                        new ClipboardItem({
-                            "text/html": new Blob([htmlContent], {
-                                type: "text/html",
-                            }),
-                            "text/plain": new Blob([url], {
-                                type: "text/plain",
-                            }),
-                        }),
-                    ]);
-                    console.log(
-                        "Copied! Ctrl+V = hyperlink, Ctrl+Shift+V = raw text:",
-                        plainContent,
-                    );
-                } catch (err) {
-                    console.warn(
-                        "Clipboard write failed, fallback to plain text:",
-                        err,
-                    );
-                    await navigator.clipboard.writeText(plainContent);
-                }
-            },
-        });
-    }
+        // Clipboard: HTML = hyperlink, Plain = URL
+        try {
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              "text/html": new Blob([html], { type: "text/html" }),
+              "text/plain": new Blob([url], { type: "text/plain" }) // <-- raw URL here
+            })
+          ]);
+          console.log("Copied! Ctrl+V = hyperlink, Ctrl+Shift+V = URL");
+        } catch {
+          await navigator.clipboard.writeText(url); // fallback plain URL
+        }
+      }
+    });
+  }
 });
